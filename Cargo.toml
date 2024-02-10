@@ -1,2 +1,3 @@
-workspace.members = [ "go-6-channel-input", "go-6-channel-output","go-module"]
-workspace.resolver = "2"
+[workspace]
+members = ["go-module", "go-mainboard"]
+resolver = "2"
