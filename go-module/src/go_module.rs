@@ -17,6 +17,23 @@ pub struct GoModule<SPI, ResetPin, InterruptPin> {
     spi: SPI,
     reset: ResetPin,
     interrupt: InterruptPin,
+    slot: ControllerSlot,
+}
+
+///A collection of all the initialized module slots, you can take a module from this struct and convert it into  
+///an actual module like the InputModule6Channel
+pub struct GoModules<SPI, ResetPin, InterruptPin> ([Option<GoModule<SPI, ResetPin, InterruptPin>>;8]);
+
+impl<SPI, ResetPin, InterruptPin> GoModules<SPI, ResetPin, InterruptPin>
+where
+SPI: SpiDevice,
+InterruptPin: InputPin,
+ResetPin: OutputPin,
+{
+    ///Take ownership of a module slot which you can then "insert" a module into
+    pub fn take_module(&mut self, slot: ControllerSlot) -> Option<GoModule<SPI, ResetPin, InterruptPin>> {
+        self.0[slot as usize].take()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -62,74 +79,68 @@ where
     InterruptPin: InputPin,
 {
     #[cfg(feature = "std")]
-    pub fn new(
+    ///Get all of the available modules for the given controller type
+    ///These modules can then be embedded into function specific modules like the InputModule6Channel
+    pub fn get_modules(
         controller_type: ControllerType,
         slot: ControllerSlot,
-    ) -> Result<Self, ModuleSetupError> {
+    ) -> Result<GoModules<SpidevDevice, CdevPin, CdevPin>, ModuleSetupError> {
         extern crate std;
-        let (interrupt, reset, spi) = match controller_type {
-            ControllerType::ModulineIV(_) => match slot {
-                ControllerSlot::Slot1 => {
-                    (
-                        get_module_interrupt("gpiochip0", 6, &slot)?,
-                        get_module_reset("gpiochip0", 7, &slot)?,
-                        get_module_spi("/dev/spidev1.0")?,
-                    )
-
-                }
-                ControllerSlot::Slot2 => {
-                    (
-                        get_module_interrupt("gpiochip4", 20, &slot)?,
-                        get_module_reset("gpiochip2", 10, &slot)?,
-                        get_module_spi("/dev/spidev1.1")?,
-                    )
-                }
-                ControllerSlot::Slot3 => {
-                    (
-                        get_module_interrupt("gpiochip0", 7, &slot)?,
-                        get_module_reset("gpiochip0", 4, &slot)?,
-                        get_module_spi("/dev/spidev2.0")?,
-                    )
-                }
-                ControllerSlot::Slot4 => {
-                    (
-                        get_module_interrupt("gpiochip4", 21, &slot)?,
-                        get_module_reset("gpiochip0", 2, &slot)?,
-                        get_module_spi("/dev/spidev2.1")?,
-                    )
-                }
-                ControllerSlot::Slot5 => {
-                    (
-                        get_module_interrupt("gpiochip4", 1, &slot)?,
-                        get_module_reset("gpiochip3", 24, &slot)?,
-                        get_module_spi("/dev/spidev2.2")?,
-                    )
-                }
-                ControllerSlot::Slot6 => {
-                    (
-                        get_module_interrupt("gpiochip3", 26, &slot)?,
-                        get_module_reset("gpiochip3", 27, &slot)?,
-                        get_module_spi("/dev/spidev2.3")?,
-                    )
-                }
-                ControllerSlot::Slot7 => {
-                    (
-                        get_module_interrupt("gpiochip2", 19, &slot)?,
-                        get_module_reset("gpiochip2", 24, &slot)?,
-                        get_module_spi("/dev/spidev0.0")?,
-                    )
-                }
-                ControllerSlot::Slot8 => {
-                    (
-                        get_module_interrupt("gpiochip2", 22, &slot)?,
-                        get_module_reset("gpiochip2", 20, &slot)?,
-                        get_module_spi("/dev/spidev0.1")?,
-                    )
-                }
+        match controller_type {
+            ControllerType::ModulineIV(_) => {
+                return Ok(GoModules([
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev1.0")?,
+                        reset: get_module_reset("gpiochip0", 7, ControllerSlot::Slot1)?,
+                        interrupt: get_module_interrupt("gpiochip0", 6, ControllerSlot::Slot1)?,
+                        slot: ControllerSlot::Slot1,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev1.1")?,
+                        reset: get_module_reset("gpiochip2", 10, ControllerSlot::Slot2)?,
+                        interrupt: get_module_interrupt("gpiochip4", 20, ControllerSlot::Slot2)?,
+                        slot: ControllerSlot::Slot2
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev2.0")?,
+                        reset: get_module_reset("gpiochip0", 4, ControllerSlot::Slot3)?,
+                        interrupt: get_module_interrupt("gpiochip0", 7, ControllerSlot::Slot3)?,
+                        slot: ControllerSlot::Slot3,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev2.1")?,
+                        reset: get_module_reset("gpiochip0", 2, ControllerSlot::Slot4)?,
+                        interrupt: get_module_interrupt("gpiochip4", 21, ControllerSlot::Slot4)?,
+                        slot: ControllerSlot::Slot4,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev2.2")?,
+                        reset: get_module_reset("gpiochip3", 24, ControllerSlot::Slot5)?,
+                        interrupt: get_module_interrupt("gpiochip4", 1, ControllerSlot::Slot5)?,
+                        slot: ControllerSlot::Slot5,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev2.3")?,
+                        reset: get_module_reset("gpiochip3", 27, ControllerSlot::Slot6)?,
+                        interrupt: get_module_interrupt("gpiochip3", 26, ControllerSlot::Slot6)?,
+                        slot: ControllerSlot::Slot6,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev0.0")?,
+                        reset: get_module_reset("gpiochip2", 24, ControllerSlot::Slot7)?,
+                        interrupt: get_module_interrupt("gpiochip2", 19, ControllerSlot::Slot7)?,
+                        slot: ControllerSlot::Slot7,
+                    }),
+                    Some(GoModule {
+                        spi: get_module_spi("/dev/spidev0.1")?,
+                        reset: get_module_reset("gpiochip2", 20, ControllerSlot::Slot8)?,
+                        interrupt: get_module_interrupt("gpiochip2", 22, ControllerSlot::Slot8)?,
+                        slot: ControllerSlot::Slot8,
+                    }),
+                ]))
             },
             _ => todo!("implement all the hardware"),
         };
-        Ok(GoModule { spi, reset, interrupt })
     }
 
     #[cfg(not(feature = "std"))]
@@ -172,7 +183,7 @@ where
         module_id: u8,
         message_type: ModuleCommunicationType,
         message_index: u8,
-        tx: &[u8],
+        tx: &mut [u8],
         delay_us: u16,
     ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
         tx[0] = slot as u8 + 1;
@@ -210,7 +221,7 @@ where
         module_id: u8,
         message_type: ModuleCommunicationType,
         message_index: u8,
-        tx: &[u8],
+        tx: &mut [u8],
         rx: &mut [u8],
         delay_us: u16,
     ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
@@ -286,18 +297,18 @@ pub fn module_checksum(data: &[u8]) -> u8 {
 fn get_module_interrupt(
     chip: &str,
     line: u32,
-    slot: &ControllerSlot,
+    slot: ControllerSlot,
 ) -> Result<CdevPin, ModuleSetupError> {
     extern crate std;
     let mut chip = Chip::new(chip).map_err(|_| ModuleSetupError::InterruptPin)?;
     let line = chip
-        .get_line(6)
+        .get_line(line)
         .map_err(|_| ModuleSetupError::InterruptPin)?;
     let line_handle = line
         .request(
             LineRequestFlags::INPUT,
             0,
-            std::format!("slot {} module interrupt", *slot as u8 + 1).as_str(),
+            std::format!("slot {} module interrupt", slot as u8 + 1).as_str(),
         )
         .map_err(|_| ModuleSetupError::InterruptPin)?;
     Ok(CdevPin::new(line_handle).map_err(|_| ModuleSetupError::InterruptPin)?)
@@ -307,16 +318,16 @@ fn get_module_interrupt(
 fn get_module_reset(
     chip: &str,
     line: u32,
-    slot: &ControllerSlot,
+    slot: ControllerSlot,
 ) -> Result<CdevPin, ModuleSetupError> {
     extern crate std;
     let mut chip = Chip::new(chip).map_err(|_| ModuleSetupError::InterruptPin)?;
-    let line = chip.get_line(7).map_err(|_| ModuleSetupError::ResetPin)?;
+    let line = chip.get_line(line).map_err(|_| ModuleSetupError::ResetPin)?;
     let line_handle = line
         .request(
             LineRequestFlags::OUTPUT,
             0,
-            std::format!("slot {} module reset", *slot as u8 + 1).as_str(),
+            std::format!("slot {} module reset", slot as u8 + 1).as_str(),
         )
         .map_err(|_| ModuleSetupError::ResetPin)?;
     Ok(CdevPin::new(line_handle).map_err(|_| ModuleSetupError::ResetPin)?)
