@@ -7,17 +7,5 @@ edition = "2021"
 
 [dependencies]
 embedded-hal = "1"
-go-mainboard = { version = "0.1.0", path = "../go-mainboard" }
-linux-embedded-hal = { version = "0.4", optional = true }
-nb = "1"
-cortex-m = "0.7"
-cortex-m-rt = "0.7"
-panic-halt = "0.2"
-
-[dependencies.stm32f4xx-hal]
-version = "0.20"
-features = ["stm32f407"]
 
 [features]
-default = ["std"]
-std = ["go-mainboard/std", "dep:linux-embedded-hal"]
