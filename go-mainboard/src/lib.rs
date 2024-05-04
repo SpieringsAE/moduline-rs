@@ -1,3 +1,5 @@
+pub mod sysfs_reset;
+
 pub enum ControllerType {
     #[cfg(feature = "std")]
     ModulineIV(HwVersion),
@@ -122,7 +124,7 @@ where
                         spi: get_module_spi("/dev/spidev1.1")?,
                         reset: get_module_reset("gpiochip2", 10, ControllerSlot::Slot2)?,
                         interrupt: get_module_interrupt("gpiochip4", 20, ControllerSlot::Slot2)?,
-                        slot: ControllerSlot::Slot2
+                        slot: ControllerSlot::Slot2,
                     }),
                     Some(GoModule {
                         spi: get_module_spi("/dev/spidev2.0")?,
@@ -161,24 +163,30 @@ where
                         slot: ControllerSlot::Slot8,
                     }),
                 ]))
-            },
+            }
             _ => todo!("implement all the hardware"),
         };
     }
 
     #[cfg(not(feature = "std"))]
-    pub fn new(controller_type: ControllerType, slot: ControllerSlot, dp: &mut Peripherals) -> Result<Self, ModuleSetupError> {
+    pub fn new(
+        controller_type: ControllerType,
+        slot: ControllerSlot,
+        dp: &mut Peripherals,
+    ) -> Result<Self, ModuleSetupError> {
         let (interrupt, reset, spi) = match ControllerType {
-            ControllerType::ModulineII(_) => {
-                match slot {
-                    ControllerSlot::Slot1 => {
-                        todo!("figure out Moduline 2 stuff")
-                    }
-                    _=> todo!("more slots")
+            ControllerType::ModulineII(_) => match slot {
+                ControllerSlot::Slot1 => {
+                    todo!("figure out Moduline 2 stuff")
                 }
-            }
+                _ => todo!("more slots"),
+            },
         };
-        Ok(GoModule { spi, reset, interrupt })
+        Ok(GoModule {
+            spi,
+            reset,
+            interrupt,
+        })
     }
 }
 
@@ -211,7 +219,9 @@ fn get_module_reset(
 ) -> Result<CdevPin, ModuleSetupError> {
     extern crate std;
     let mut chip = Chip::new(chip).map_err(|_| ModuleSetupError::InterruptPin)?;
-    let line = chip.get_line(line).map_err(|_| ModuleSetupError::ResetPin)?;
+    let line = chip
+        .get_line(line)
+        .map_err(|_| ModuleSetupError::ResetPin)?;
     let line_handle = line
         .request(
             LineRequestFlags::OUTPUT,
