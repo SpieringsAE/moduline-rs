@@ -18,10 +18,8 @@ where
     InterruptPin: InputPin,
 {
     pub fn new(
-       module: GoModule<SPI, ResetPin, InterruptPin> 
+        module: GoModule<SPI, ResetPin, InterruptPin>,
     ) -> Result<Self, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-        Ok(InputModule6Channel {
-            module,
-        })
+        Ok(InputModule6Channel { module })
     }
 }

@@ -54,8 +54,16 @@ where
     ResetPin: OutputPin,
     InterruptPin: InputPin,
 {
-    pub fn new(spi: SPI, reset: ResetPin, interrupt: InterruptPin) -> GoModule<SPI, ResetPin, InterruptPin> {
-        GoModule { spi, reset, interrupt }
+    pub fn new(
+        spi: SPI,
+        reset: ResetPin,
+        interrupt: InterruptPin,
+    ) -> GoModule<SPI, ResetPin, InterruptPin> {
+        GoModule {
+            spi,
+            reset,
+            interrupt,
+        }
     }
 
     pub fn escape_module_bootloader(
@@ -147,9 +155,7 @@ where
             self.spi
                 .transaction(&mut transactions)
                 .map_err(GoModuleError::SPI)?;
-            if module_checksum(&rx) == rx[rx.len() - 1]
-                && rx[1] == rx.len() as u8 - 1
-            {
+            if module_checksum(&rx) == rx[rx.len() - 1] && rx[1] == rx.len() as u8 - 1 {
                 Ok(())
             } else {
                 Err(GoModuleError::CommunicationError(
@@ -192,4 +198,3 @@ pub fn module_checksum(data: &[u8]) -> u8 {
     }
     checksum
 }
-
