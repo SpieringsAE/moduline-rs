@@ -1,0 +1,8 @@
+[package]
+name = "go-modules"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+go-module-base = {version = "*", path = "../go-module-base"}
+embedded-hal = "1"

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-go-module = { version = "0.1", path = "../go-module"}
+go-module-base = { version = "0.1", path = "../go-module-base"}
 embedded-hal = "1"
 
 [features]
