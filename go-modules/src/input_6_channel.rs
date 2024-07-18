@@ -1,10 +1,9 @@
 use std::io::{Cursor, Write};
 
 use embedded_hal::{
-    digital::{InputPin, OutputPin},
-    spi::SpiDevice,
+    delay::DelayNs, digital::{InputPin, OutputPin}, spi::SpiDevice
 };
-use go_module_base::{GoModule, GoModuleError, ModuleCommunicationDirection, ModuleCommunicationType};
+use go_module_base::{GoModule, GoModuleError, GoModuleUnknown, ModuleCommunicationDirection, ModuleCommunicationType};
 
 
 const INPUTMODULE6CHANNELMESSAGELENGTH: usize = 55;
@@ -72,22 +71,23 @@ pub struct InputModule6ChannelConfiguration {
 	supplies: [InputModule6ChannelSupply;3],
 }
 
-pub struct InputModule6Channel<SPI, ResetPin, InterruptPin> {
-    module: GoModule<SPI, ResetPin, InterruptPin>,
+pub struct InputModule6Channel<SPI, ResetPin, InterruptPin, Delay> {
+    module: GoModule<SPI, ResetPin, InterruptPin, Delay>,
     configuration: InputModule6ChannelConfiguration,
 }
 
-impl<SPI, ResetPin, InterruptPin> InputModule6Channel<SPI, ResetPin, InterruptPin>
+impl<SPI, ResetPin, InterruptPin, Delay> InputModule6Channel<SPI, ResetPin, InterruptPin, Delay>
 where
     SPI: SpiDevice,
     ResetPin: OutputPin,
     InterruptPin: InputPin,
+	Delay: DelayNs,
 {
     pub fn reconfigure(
         self,
-    ) -> (GoModule<SPI, ResetPin, InterruptPin>,InputModule6ChannelConfiguration)
+    ) -> (GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>,InputModule6ChannelConfiguration)
      {
-		(self.module, self.configuration)
+		(self.module.degrade(), self.configuration)
     }
 
 	pub fn read_channels(&mut self) -> Result<InputModule6ChannelValues, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
@@ -150,18 +150,19 @@ impl InputModule6ChannelChannel {
 	}
 }
 
-pub struct InputModule6ChannelBuilder<SPI, ResetPin, InterruptPin> {
-    module: GoModule<SPI, ResetPin, InterruptPin>,
+pub struct InputModule6ChannelBuilder<SPI, ResetPin, InterruptPin, Delay> {
+    module: GoModule<SPI, ResetPin, InterruptPin, Delay>,
 	config: InputModule6ChannelConfiguration,
 }
 
-impl<SPI, ResetPin, InterruptPin> InputModule6ChannelBuilder<SPI, ResetPin, InterruptPin>
+impl<SPI, ResetPin, InterruptPin, Delay> InputModule6ChannelBuilder<SPI, ResetPin, InterruptPin, Delay>
 where
     SPI: SpiDevice,
     ResetPin: OutputPin,
     InterruptPin: InputPin,
+	Delay: DelayNs,
 {
-    pub fn new(module: GoModule<SPI, ResetPin, InterruptPin>) -> Self {
+    pub fn new(module: GoModule<SPI, ResetPin, InterruptPin, Delay>) -> Self {
         InputModule6ChannelBuilder {
             module,
 			config: InputModule6ChannelConfiguration::default(),
@@ -184,11 +185,17 @@ where
         }
     }
 
-    pub fn build(self) -> Result<InputModule6Channel<SPI, ResetPin, InterruptPin>, (GoModule<SPI,ResetPin,InterruptPin>, [InputModule6ChannelChannel;6])> {
-        let module = InputModule6Channel {
+    pub fn build(self) -> Result<InputModule6Channel<SPI, ResetPin, InterruptPin, Delay>, (GoModule<SPI,ResetPin,InterruptPin,Delay>, InputModule6ChannelConfiguration)> {
+        let mut module = InputModule6Channel {
             module: self.module,
             configuration: self.config
         };
+		let Ok(bootmessage) = module.module.escape_module_bootloader() else {
+			return Err((module.module, module.configuration))
+		};
+		if INPUTMODULE6CHANNELID != bootmessage[6..9] {
+			return Err((module.module, module.configuration))
+		}
 		let tx = [0u8;INPUTMODULE6CHANNELMESSAGELENGTH];
 		let mut cursor = Cursor::new(tx);
 		cursor.set_position(6);

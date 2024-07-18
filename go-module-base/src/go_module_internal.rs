@@ -1,8 +1,17 @@
 ///Internal Struct that holds the driver for different types of modules
-pub struct GoModule<SPI, ResetPin, InterruptPin> {
+pub struct GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
     spi: SPI,
     reset: ResetPin,
     interrupt: InterruptPin,
+	delay: Delay,
+	slot: u8,
+}
+
+pub struct GoModule<SPI, ResetPin, InterruptPin, Delay> {
+    spi: SPI,
+    reset: ResetPin,
+    interrupt: InterruptPin,
+	delay: Delay,
 	slot: u8,
 }
 
@@ -47,32 +56,58 @@ pub enum ModuleCommunicationType {
 #[cfg(not(feature = "async"))]
 pub mod go_module{
 
+    use crate::GoModuleUnknown;
+
     use super::{GoModule, module_checksum,GoModuleError,CommunicationError,BOOTMESSAGELENGTH,ModuleCommunicationType, ModuleCommunicationDirection};
     use embedded_hal::digital::{InputPin, OutputPin, PinState};
     use embedded_hal::spi::{SpiDevice,Operation};
+	use embedded_hal::delay::DelayNs;
 
-
-
-    impl<SPI, ResetPin, InterruptPin> GoModule<SPI, ResetPin, InterruptPin>
-    where
-        SPI: SpiDevice,
-        ResetPin: OutputPin,
-        InterruptPin: InputPin,
-    {
-        pub fn new(
+	impl <SPI, ResetPin, InterruptPin, Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> 
+	where 
+	SPI: SpiDevice,
+	ResetPin: OutputPin,
+	InterruptPin: InputPin,
+	Delay: DelayNs,
+	{
+		pub fn new(
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
+			delay: Delay,
 			slot: u8,
-        ) -> GoModule<SPI, ResetPin, InterruptPin> {
-            GoModule {
+        ) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+            GoModuleUnknown {
                 spi,
                 reset,
                 interrupt,
+				delay,
 				slot,
             }
         }
 
+		pub fn module_reset(
+            mut self
+        ) -> Result<GoModule<SPI, ResetPin, InterruptPin, Delay>, GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>> {
+            if self.reset.set_state(PinState::Low).is_err() {
+				return Err(self)
+			}
+			self.delay.delay_ms(100);
+			if self.reset.set_state(PinState::High).is_err() {
+				return Err(self)
+			}
+			self.delay.delay_ms(100);
+			Ok(GoModule { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot})
+        }
+	}
+
+    impl<SPI, ResetPin, InterruptPin, Delay> GoModule<SPI, ResetPin, InterruptPin, Delay>
+    where
+        SPI: SpiDevice,
+        ResetPin: OutputPin,
+        InterruptPin: InputPin,
+		Delay: DelayNs,
+    {
         pub fn escape_module_bootloader(
             &mut self,
         ) -> Result<
@@ -172,13 +207,6 @@ pub mod go_module{
             }
         }
 
-        pub fn set_module_reset(
-            &mut self,
-            state: PinState,
-        ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            self.reset.set_state(state).map_err(GoModuleError::ResetPin)
-        }
-
         pub fn get_module_interrupt_state(
             &mut self,
         ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
@@ -192,37 +220,69 @@ pub mod go_module{
                 Ok(PinState::Low)
             }
         }
+
+		pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+			GoModuleUnknown { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot }
+		}
     }
 }
 
 #[cfg(feature = "async")]
 pub mod go_module_async {
+    use crate::GoModuleUnknown;
+
     use super::{GoModule,module_checksum, GoModuleError, BOOTMESSAGELENGTH, ModuleCommunicationDirection, ModuleCommunicationType, CommunicationError};
     use embedded_hal::digital::{InputPin, OutputPin, PinState};
 
+    use embedded_hal_async::delay::DelayNs;
     #[cfg(feature = "async")]
     use embedded_hal_async::{digital::Wait,spi::{SpiDevice,Operation}};
 
-    impl<SPI, ResetPin, InterruptPin> GoModule<SPI, ResetPin, InterruptPin>
+	impl<SPI, ResetPin, InterruptPin,Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin,Delay>
     where
         SPI: SpiDevice,
         ResetPin: OutputPin + Wait,
         InterruptPin: InputPin + Wait,
+		Delay: DelayNs,
     {
-        pub fn new(
+		pub fn new(
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
+			delay: Delay,
 			slot: u8,
-        ) -> GoModule<SPI, ResetPin, InterruptPin> {
-            GoModule {
+        ) -> GoModuleUnknown<SPI, ResetPin, InterruptPin,Delay> {
+            GoModuleUnknown {
                 spi,
                 reset,
                 interrupt,
+				delay,
 				slot,
             }
         }
 
+		pub async fn module_reset(
+        	mut self,
+        ) -> Result<GoModule<SPI, ResetPin, InterruptPin, Delay>, GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>> {
+            if self.reset.set_state(PinState::Low).is_err() {
+				return Err(self)
+			}
+			self.delay.delay_ms(100).await;
+			if self.reset.set_state(PinState::High).is_err() {
+				return Err(self)
+			}
+			self.delay.delay_ms(100).await;
+			Ok(GoModule { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot})
+        }
+	}
+
+    impl<SPI, ResetPin, InterruptPin,Delay> GoModule<SPI, ResetPin, InterruptPin,Delay>
+    where
+        SPI: SpiDevice,
+        ResetPin: OutputPin + Wait,
+        InterruptPin: InputPin + Wait,
+		Delay: DelayNs,
+    {
         pub async fn escape_module_bootloader(
             &mut self,
         ) -> Result<
@@ -318,13 +378,6 @@ pub mod go_module_async {
             }
         }
 
-        pub fn set_module_reset(
-            &mut self,
-            state: PinState,
-        ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            self.reset.set_state(state).map_err(GoModuleError::ResetPin)
-        }
-
         pub fn get_module_interrupt_state(
             &mut self,
         ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
@@ -338,6 +391,10 @@ pub mod go_module_async {
                 Ok(PinState::Low)
             }
         }
+
+		pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+			GoModuleUnknown { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot }
+		}
     }
 }
 
