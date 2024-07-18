@@ -3,6 +3,7 @@ pub struct GoModule<SPI, ResetPin, InterruptPin> {
     spi: SPI,
     reset: ResetPin,
     interrupt: InterruptPin,
+	slot: u8,
 }
 
 const BOOTMESSAGELENGTH: usize = 56;
@@ -27,6 +28,7 @@ pub enum ModuleSetupError {
 pub enum CommunicationError {
     ModuleUnavailable,
     ChecksumIncorrect,
+	UnableToSerDe,
 }
 
 #[repr(u8)]
@@ -61,11 +63,13 @@ pub mod go_module{
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
+			slot: u8,
         ) -> GoModule<SPI, ResetPin, InterruptPin> {
             GoModule {
                 spi,
                 reset,
                 interrupt,
+				slot,
             }
         }
 
@@ -89,7 +93,6 @@ pub mod go_module{
 
         pub fn send_spi(
             &mut self,
-            slot: u8,
             direction: ModuleCommunicationDirection,
             module_id: u8,
             message_type: ModuleCommunicationType,
@@ -97,7 +100,7 @@ pub mod go_module{
             tx: &mut [u8],
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            tx[0] = slot as u8 + 1;
+            tx[0] = self.slot;
             tx[1] = tx.len() as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
@@ -127,7 +130,6 @@ pub mod go_module{
 
         pub fn send_receive_spi(
             &mut self,
-            slot: u8,
             direction: ModuleCommunicationDirection,
             module_id: u8,
             message_type: ModuleCommunicationType,
@@ -136,7 +138,7 @@ pub mod go_module{
             rx: &mut [u8],
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            tx[0] = slot as u8 + 1;
+            tx[0] = self.slot;
             tx[1] = tx.len() as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
@@ -211,11 +213,13 @@ pub mod go_module_async {
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
+			slot: u8,
         ) -> GoModule<SPI, ResetPin, InterruptPin> {
             GoModule {
                 spi,
                 reset,
                 interrupt,
+				slot,
             }
         }
 
@@ -239,7 +243,6 @@ pub mod go_module_async {
 
         pub async fn send_spi(
             &mut self,
-            slot: u8,
             direction: ModuleCommunicationDirection,
             module_id: u8,
             message_type: ModuleCommunicationType,
@@ -247,7 +250,7 @@ pub mod go_module_async {
             tx: &mut [u8],
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            tx[0] = slot as u8 + 1;
+            tx[0] = self.slot;
             tx[1] = tx.len() as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
@@ -275,7 +278,6 @@ pub mod go_module_async {
 
         pub async fn send_receive_spi(
             &mut self,
-            slot: u8,
             direction: ModuleCommunicationDirection,
             module_id: u8,
             message_type: ModuleCommunicationType,
@@ -284,7 +286,7 @@ pub mod go_module_async {
             rx: &mut [u8],
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
-            tx[0] = slot as u8 + 1;
+            tx[0] = self.slot;
             tx[1] = tx.len() as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
