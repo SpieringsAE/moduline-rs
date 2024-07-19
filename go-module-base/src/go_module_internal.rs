@@ -15,7 +15,7 @@ pub struct GoModule<SPI, ResetPin, InterruptPin, Delay> {
 	slot: u8,
 }
 
-const BOOTMESSAGELENGTH: usize = 56;
+const BOOTMESSAGELENGTH: usize = 46;
 
 #[derive(Copy, Clone, Debug)]
 pub enum GoModuleError<SPI, ResetPin, InterruptPin> {
@@ -47,6 +47,7 @@ pub enum ModuleCommunicationDirection {
 }
 
 #[repr(u8)]
+#[derive(PartialEq, Eq,Clone, Copy)]
 pub enum ModuleCommunicationType {
     ModuleId = 1,
     Configuration,
@@ -147,20 +148,20 @@ pub mod go_module{
                 Operation::DelayNs(delay_us as u32 * 1000),
                 Operation::Write(tx),
             ];
-            if self
-                .interrupt
-                .is_high()
-                .map_err(GoModuleError::InterruptPin)?
-            {
+            // if self
+            //     .interrupt
+            //     .is_high()
+            //     .map_err(GoModuleError::InterruptPin)?
+            // {
                 self.spi
                     .transaction(&mut transactions)
                     .map_err(GoModuleError::SPI)?;
                 Ok(())
-            } else {
-                Err(GoModuleError::CommunicationError(
-                    CommunicationError::ModuleUnavailable,
-                ))
-            }
+            // } else {
+            //     Err(GoModuleError::CommunicationError(
+            //         CommunicationError::ModuleUnavailable,
+            //     ))
+            // }
         }
 
         pub fn send_receive_spi(
@@ -187,24 +188,25 @@ pub mod go_module{
                 Operation::DelayNs(delay_us as u32 * 100),
                 Operation::Transfer(rx, tx),
             ];
-            if self
-                .interrupt
-                .is_high()
-                .map_err(GoModuleError::InterruptPin)? 
-            {
-                self.spi
-                    .transaction(&mut transactions)
-                    .map_err(GoModuleError::SPI)?;
-                if module_checksum(&rx) == rx[rx.len() - 1] && rx[1] == rx.len() as u8 - 1 {
-                    Ok(())
-                } else {
-                    Err(GoModuleError::CommunicationError(
-                        CommunicationError::ChecksumIncorrect,
-                    ))
-                }
-            } else {
-                Err(GoModuleError::CommunicationError(CommunicationError::ModuleUnavailable))
-            }
+            // if self
+            //     .interrupt
+            //     .is_high()
+            //     .map_err(GoModuleError::InterruptPin)? 
+            // {
+				self.spi
+					.transaction(&mut transactions)
+					.map_err(GoModuleError::SPI)?;
+				// if module_checksum(&rx) == rx[rx.len() - 1] && rx[1] == rx.len() as u8 - 1 {
+				if module_checksum(rx) == *rx.last().unwrap() {
+					Ok(())
+				} else {
+					Err(GoModuleError::CommunicationError(
+						CommunicationError::ChecksumIncorrect,
+					))
+				}
+            // } else {
+            //     Err(GoModuleError::CommunicationError(CommunicationError::ModuleUnavailable))
+            // }
         }
 
         pub fn get_module_interrupt_state(
@@ -400,8 +402,8 @@ pub mod go_module_async {
 
 pub fn module_checksum(data: &[u8]) -> u8 {
     let mut checksum: u8 = 0;
-    for byte in data.iter() {
-        checksum = checksum.wrapping_add(*byte);
+	for i in 0..(data.len()-2) {
+        checksum = checksum.wrapping_add(data[i]);
     }
     checksum
 }

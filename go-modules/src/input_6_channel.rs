@@ -28,9 +28,9 @@ pub enum InputModule6ChannelPullUp {
 #[derive(Clone, Copy)]
 pub enum InputModule6ChannelPullDown {
     None,
-    PU3_3k,
-    PU4_7k,
-    PU10k,
+    PD3_3k,
+    PD4_7k,
+    PD10k,
 }
 
 #[derive(Clone,Copy)]
@@ -93,7 +93,10 @@ where
 	pub fn read_channels(&mut self) -> Result<InputModule6ChannelValues, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
 		let mut tx = [0u8;INPUTMODULE6CHANNELMESSAGELENGTH];
 		let mut rx = [0u8;INPUTMODULE6CHANNELMESSAGELENGTH];
-		self.module.send_receive_spi(ModuleCommunicationDirection::FromModule, 11, ModuleCommunicationType::Data, 1, &mut tx, &mut rx, 0)?;
+		self.module.send_receive_spi(ModuleCommunicationDirection::ToModule, 11, ModuleCommunicationType::Data, 1, &mut tx, &mut rx, 0)?;
+		if rx[2] != 2 || rx[3] != 11 || rx[4] != 3 || rx[5] != 1 {
+			return Err(GoModuleError::CommunicationError(go_module_base::CommunicationError::UnableToSerDe));
+		}
 		Ok(InputModule6ChannelValues {
 			channel1: u32::from_le_bytes(rx[6..10].try_into().unwrap()), //These can't fail aslong as the slice is correctly sized
 			channel2: u32::from_le_bytes(rx[14..18].try_into().unwrap()),
@@ -178,7 +181,7 @@ where
 		volt: InputModule6ChannelVoltage,
     ) -> Self {
 		let mut config = self.config;
-		config.channels[channel as usize] = InputModule6ChannelChannel{ func, pu, pd, volt};
+		config.channels[channel as usize - 1] = InputModule6ChannelChannel{ func, pu, pd, volt};
         InputModule6ChannelBuilder {
             module: self.module,
             config: config,
@@ -193,6 +196,7 @@ where
 		let Ok(bootmessage) = module.module.escape_module_bootloader() else {
 			return Err((module.module, module.configuration))
 		};
+		
 		if INPUTMODULE6CHANNELID != bootmessage[6..9] {
 			return Err((module.module, module.configuration))
 		}
@@ -204,6 +208,9 @@ where
 		}
 		for supply in &module.configuration.supplies {
 			cursor.write(&[*supply as u8]).unwrap();
+		}
+		if module.module.send_spi(ModuleCommunicationDirection::ToModule, 11, ModuleCommunicationType::Configuration, 1, cursor.get_mut(), u16::MAX).is_err() {
+			return Err((module.module, module.configuration))
 		}
 		Ok(module)
     }
