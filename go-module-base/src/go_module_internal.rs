@@ -3,16 +3,16 @@ pub struct GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
     spi: SPI,
     reset: ResetPin,
     interrupt: InterruptPin,
-	delay: Delay,
-	slot: u8,
+    delay: Delay,
+    slot: u8,
 }
 
 pub struct GoModule<SPI, ResetPin, InterruptPin, Delay> {
     spi: SPI,
     reset: ResetPin,
     interrupt: InterruptPin,
-	delay: Delay,
-	slot: u8,
+    pub delay: Delay,
+    slot: u8,
 }
 
 const BOOTMESSAGELENGTH: usize = 46;
@@ -37,7 +37,7 @@ pub enum ModuleSetupError {
 pub enum CommunicationError {
     ModuleUnavailable,
     ChecksumIncorrect,
-	UnableToSerDe,
+    UnableToSerDe,
 }
 
 #[repr(u8)]
@@ -47,7 +47,7 @@ pub enum ModuleCommunicationDirection {
 }
 
 #[repr(u8)]
-#[derive(PartialEq, Eq,Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ModuleCommunicationType {
     ModuleId = 1,
     Configuration,
@@ -55,59 +55,72 @@ pub enum ModuleCommunicationType {
     Feedback,
 }
 #[cfg(not(feature = "async"))]
-pub mod go_module{
+pub mod go_module {
 
     use crate::GoModuleUnknown;
 
-    use super::{GoModule, module_checksum,GoModuleError,CommunicationError,BOOTMESSAGELENGTH,ModuleCommunicationType, ModuleCommunicationDirection};
+    use super::{
+        module_checksum, CommunicationError, GoModule, GoModuleError, ModuleCommunicationDirection,
+        ModuleCommunicationType, BOOTMESSAGELENGTH,
+    };
+    use embedded_hal::delay::DelayNs;
     use embedded_hal::digital::{InputPin, OutputPin, PinState};
-    use embedded_hal::spi::{SpiDevice,Operation};
-	use embedded_hal::delay::DelayNs;
+    use embedded_hal::spi::{Operation, SpiDevice};
 
-	impl <SPI, ResetPin, InterruptPin, Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> 
-	where 
-	SPI: SpiDevice,
-	ResetPin: OutputPin,
-	InterruptPin: InputPin,
-	Delay: DelayNs,
-	{
-		pub fn new(
+    impl<SPI, ResetPin, InterruptPin, Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>
+    where
+        SPI: SpiDevice,
+        ResetPin: OutputPin,
+        InterruptPin: InputPin,
+        Delay: DelayNs,
+    {
+        pub fn new(
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
-			delay: Delay,
-			slot: u8,
+            delay: Delay,
+            slot: u8,
         ) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+            debug_assert!(slot > 0, "slot needs to be larger than 0");
             GoModuleUnknown {
                 spi,
                 reset,
                 interrupt,
-				delay,
-				slot,
+                delay,
+                slot,
             }
         }
 
-		pub fn module_reset(
-            mut self
-        ) -> Result<GoModule<SPI, ResetPin, InterruptPin, Delay>, GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>> {
+        pub fn module_reset(
+            mut self,
+        ) -> Result<
+            GoModule<SPI, ResetPin, InterruptPin, Delay>,
+            GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>,
+        > {
             if self.reset.set_state(PinState::Low).is_err() {
-				return Err(self)
-			}
-			self.delay.delay_ms(100);
-			if self.reset.set_state(PinState::High).is_err() {
-				return Err(self)
-			}
-			self.delay.delay_ms(100);
-			Ok(GoModule { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot})
+                return Err(self);
+            }
+            self.delay.delay_ms(100);
+            if self.reset.set_state(PinState::High).is_err() {
+                return Err(self);
+            }
+            self.delay.delay_ms(100);
+            Ok(GoModule {
+                spi: self.spi,
+                reset: self.reset,
+                interrupt: self.interrupt,
+                delay: self.delay,
+                slot: self.slot,
+            })
         }
-	}
+    }
 
     impl<SPI, ResetPin, InterruptPin, Delay> GoModule<SPI, ResetPin, InterruptPin, Delay>
     where
         SPI: SpiDevice,
         ResetPin: OutputPin,
         InterruptPin: InputPin,
-		Delay: DelayNs,
+        Delay: DelayNs,
     {
         pub fn escape_module_bootloader(
             &mut self,
@@ -120,12 +133,12 @@ pub mod go_module{
             tx[0] = 19;
             tx[1] = (BOOTMESSAGELENGTH - 1) as u8;
             tx[2] = 19;
-            tx[BOOTMESSAGELENGTH - 1] = module_checksum(&tx);
+            tx[BOOTMESSAGELENGTH - 1] = module_checksum(&tx, BOOTMESSAGELENGTH);
             self.spi
                 .transaction(&mut [Operation::Transfer(&mut rx, &tx)])
                 .map_err(GoModuleError::SPI)?;
             Ok(rx)
-        }  
+        }
 
         pub fn send_spi(
             &mut self,
@@ -134,15 +147,20 @@ pub mod go_module{
             message_type: ModuleCommunicationType,
             message_index: u8,
             tx: &mut [u8],
+            len: usize,
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
+            debug_assert!(
+                len <= tx.len(),
+                "len cannot be longer than the actual buffer length"
+            );
             tx[0] = self.slot;
-            tx[1] = tx.len() as u8 - 1;
+            tx[1] = len as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
             tx[4] = message_type as u8;
             tx[5] = message_index;
-            tx[tx.len() - 1] = module_checksum(tx);
+            tx[len - 1] = module_checksum(tx, len);
 
             let mut transactions = [
                 Operation::DelayNs(delay_us as u32 * 1000),
@@ -153,10 +171,10 @@ pub mod go_module{
             //     .is_high()
             //     .map_err(GoModuleError::InterruptPin)?
             // {
-                self.spi
-                    .transaction(&mut transactions)
-                    .map_err(GoModuleError::SPI)?;
-                Ok(())
+            self.spi
+                .transaction(&mut transactions)
+                .map_err(GoModuleError::SPI)?;
+            Ok(())
             // } else {
             //     Err(GoModuleError::CommunicationError(
             //         CommunicationError::ModuleUnavailable,
@@ -172,38 +190,47 @@ pub mod go_module{
             message_index: u8,
             tx: &mut [u8],
             rx: &mut [u8],
+            len: usize,
             delay_us: u16,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
+            debug_assert!(
+                tx.len() == rx.len(),
+                "receive and transmit buffer must have equal length"
+            );
+            debug_assert!(
+                len <= tx.len(),
+                "len cannot be longer than the actual buffer length"
+            );
             tx[0] = self.slot;
-            tx[1] = tx.len() as u8 - 1;
+            tx[1] = len as u8 - 1;
             tx[2] = direction as u8;
             tx[3] = module_id;
             tx[4] = message_type as u8;
             tx[5] = message_index;
-            tx[tx.len() - 1] = module_checksum(tx);
+            tx[len - 1] = module_checksum(tx, len);
             rx[0] = 0;
-            rx[rx.len() - 1] = 0;
+            rx[len - 1] = 0;
 
             let mut transactions = [
-                Operation::DelayNs(delay_us as u32 * 100),
+                Operation::DelayNs(delay_us as u32 * 1000),
                 Operation::Transfer(rx, tx),
             ];
             // if self
             //     .interrupt
             //     .is_high()
-            //     .map_err(GoModuleError::InterruptPin)? 
+            //     .map_err(GoModuleError::InterruptPin)?
             // {
-				self.spi
-					.transaction(&mut transactions)
-					.map_err(GoModuleError::SPI)?;
-				// if module_checksum(&rx) == rx[rx.len() - 1] && rx[1] == rx.len() as u8 - 1 {
-				if module_checksum(rx) == *rx.last().unwrap() {
-					Ok(())
-				} else {
-					Err(GoModuleError::CommunicationError(
-						CommunicationError::ChecksumIncorrect,
-					))
-				}
+            self.spi
+                .transaction(&mut transactions)
+                .map_err(GoModuleError::SPI)?;
+            // if module_checksum(&rx, len) == rx[rx.len() - 1] && rx[1] == rx.len() as u8 - 1 {
+            if module_checksum(rx, len) == rx[len - 1] {
+                Ok(())
+            } else {
+                Err(GoModuleError::CommunicationError(
+                    CommunicationError::ChecksumIncorrect,
+                ))
+            }
             // } else {
             //     Err(GoModuleError::CommunicationError(CommunicationError::ModuleUnavailable))
             // }
@@ -211,7 +238,8 @@ pub mod go_module{
 
         pub fn get_module_interrupt_state(
             &mut self,
-        ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
+        ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>>
+        {
             if self
                 .interrupt
                 .is_high()
@@ -223,9 +251,15 @@ pub mod go_module{
             }
         }
 
-		pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
-			GoModuleUnknown { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot }
-		}
+        pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+            GoModuleUnknown {
+                spi: self.spi,
+                reset: self.reset,
+                interrupt: self.interrupt,
+                delay: self.delay,
+                slot: self.slot,
+            }
+        }
     }
 }
 
@@ -233,57 +267,72 @@ pub mod go_module{
 pub mod go_module_async {
     use crate::GoModuleUnknown;
 
-    use super::{GoModule,module_checksum, GoModuleError, BOOTMESSAGELENGTH, ModuleCommunicationDirection, ModuleCommunicationType, CommunicationError};
+    use super::{
+        module_checksum, CommunicationError, GoModule, GoModuleError, ModuleCommunicationDirection,
+        ModuleCommunicationType, BOOTMESSAGELENGTH,
+    };
     use embedded_hal::digital::{InputPin, OutputPin, PinState};
 
     use embedded_hal_async::delay::DelayNs;
     #[cfg(feature = "async")]
-    use embedded_hal_async::{digital::Wait,spi::{SpiDevice,Operation}};
+    use embedded_hal_async::{
+        digital::Wait,
+        spi::{Operation, SpiDevice},
+    };
 
-	impl<SPI, ResetPin, InterruptPin,Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin,Delay>
+    impl<SPI, ResetPin, InterruptPin, Delay> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>
     where
         SPI: SpiDevice,
         ResetPin: OutputPin + Wait,
         InterruptPin: InputPin + Wait,
-		Delay: DelayNs,
+        Delay: DelayNs,
     {
-		pub fn new(
+        pub fn new(
             spi: SPI,
             reset: ResetPin,
             interrupt: InterruptPin,
-			delay: Delay,
-			slot: u8,
-        ) -> GoModuleUnknown<SPI, ResetPin, InterruptPin,Delay> {
+            delay: Delay,
+            slot: u8,
+        ) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
             GoModuleUnknown {
                 spi,
                 reset,
                 interrupt,
-				delay,
-				slot,
+                delay,
+                slot,
             }
         }
 
-		pub async fn module_reset(
-        	mut self,
-        ) -> Result<GoModule<SPI, ResetPin, InterruptPin, Delay>, GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>> {
+        pub async fn module_reset(
+            mut self,
+        ) -> Result<
+            GoModule<SPI, ResetPin, InterruptPin, Delay>,
+            GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>,
+        > {
             if self.reset.set_state(PinState::Low).is_err() {
-				return Err(self)
-			}
-			self.delay.delay_ms(100).await;
-			if self.reset.set_state(PinState::High).is_err() {
-				return Err(self)
-			}
-			self.delay.delay_ms(100).await;
-			Ok(GoModule { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot})
+                return Err(self);
+            }
+            self.delay.delay_ms(100).await;
+            if self.reset.set_state(PinState::High).is_err() {
+                return Err(self);
+            }
+            self.delay.delay_ms(100).await;
+            Ok(GoModule {
+                spi: self.spi,
+                reset: self.reset,
+                interrupt: self.interrupt,
+                delay: self.delay,
+                slot: self.slot,
+            })
         }
-	}
+    }
 
-    impl<SPI, ResetPin, InterruptPin,Delay> GoModule<SPI, ResetPin, InterruptPin,Delay>
+    impl<SPI, ResetPin, InterruptPin, Delay> GoModule<SPI, ResetPin, InterruptPin, Delay>
     where
         SPI: SpiDevice,
         ResetPin: OutputPin + Wait,
         InterruptPin: InputPin + Wait,
-		Delay: DelayNs,
+        Delay: DelayNs,
     {
         pub async fn escape_module_bootloader(
             &mut self,
@@ -324,8 +373,7 @@ pub mod go_module_async {
                 Operation::DelayNs(delay_us as u32 * 1000),
                 Operation::Write(tx),
             ];
-            self
-                .interrupt
+            self.interrupt
                 .wait_for_high()
                 .await
                 .map_err(GoModuleError::InterruptPin)?;
@@ -335,7 +383,6 @@ pub mod go_module_async {
                 .await
                 .map_err(GoModuleError::SPI)?;
             Ok(())
-
         }
 
         pub async fn send_receive_spi(
@@ -362,8 +409,7 @@ pub mod go_module_async {
                 Operation::DelayNs(delay_us as u32 * 100),
                 Operation::Transfer(rx, tx),
             ];
-            self
-                .interrupt
+            self.interrupt
                 .wait_for_high()
                 .await
                 .map_err(GoModuleError::InterruptPin)?;
@@ -382,7 +428,8 @@ pub mod go_module_async {
 
         pub fn get_module_interrupt_state(
             &mut self,
-        ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
+        ) -> Result<PinState, GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>>
+        {
             if self
                 .interrupt
                 .is_high()
@@ -394,15 +441,22 @@ pub mod go_module_async {
             }
         }
 
-		pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
-			GoModuleUnknown { spi: self.spi, reset: self.reset, interrupt: self.interrupt, delay: self.delay, slot: self.slot }
-		}
+        pub fn degrade(self) -> GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay> {
+            GoModuleUnknown {
+                spi: self.spi,
+                reset: self.reset,
+                interrupt: self.interrupt,
+                delay: self.delay,
+                slot: self.slot,
+            }
+        }
     }
 }
 
-pub fn module_checksum(data: &[u8]) -> u8 {
+pub fn module_checksum(data: &[u8], len: usize) -> u8 {
+    debug_assert!(len <= data.len());
     let mut checksum: u8 = 0;
-	for i in 0..(data.len()-2) {
+    for i in 0..(len - 1) {
         checksum = checksum.wrapping_add(data[i]);
     }
     checksum
