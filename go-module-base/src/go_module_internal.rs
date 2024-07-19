@@ -148,7 +148,7 @@ pub mod go_module {
             message_index: u8,
             tx: &mut [u8],
             len: usize,
-            delay_us: u16,
+            delay_us: u32,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
             debug_assert!(
                 len <= tx.len(),
@@ -162,15 +162,13 @@ pub mod go_module {
             tx[5] = message_index;
             tx[len - 1] = module_checksum(tx, len);
 
-            let mut transactions = [
-                Operation::DelayNs(delay_us as u32 * 1000),
-                Operation::Write(tx),
-            ];
+            let mut transactions = [Operation::Write(tx)];
             // if self
             //     .interrupt
             //     .is_high()
             //     .map_err(GoModuleError::InterruptPin)?
             // {
+            self.delay.delay_us(delay_us);
             self.spi
                 .transaction(&mut transactions)
                 .map_err(GoModuleError::SPI)?;
@@ -191,7 +189,7 @@ pub mod go_module {
             tx: &mut [u8],
             rx: &mut [u8],
             len: usize,
-            delay_us: u16,
+            delay_us: u32,
         ) -> Result<(), GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>> {
             debug_assert!(
                 tx.len() == rx.len(),
@@ -211,15 +209,13 @@ pub mod go_module {
             rx[0] = 0;
             rx[len - 1] = 0;
 
-            let mut transactions = [
-                Operation::DelayNs(delay_us as u32 * 1000),
-                Operation::Transfer(rx, tx),
-            ];
+            let mut transactions = [Operation::Transfer(rx, tx)];
             // if self
             //     .interrupt
             //     .is_high()
             //     .map_err(GoModuleError::InterruptPin)?
             // {
+            self.delay.delay_us(delay_us);
             self.spi
                 .transaction(&mut transactions)
                 .map_err(GoModuleError::SPI)?;

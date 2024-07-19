@@ -262,7 +262,6 @@ where
         for (i, supply) in module.configuration.supplies.iter().enumerate() {
             tx[i + 42] = *supply as u8;
         }
-        module.module.delay.delay_ms(500); //this seems extremely long for some reason, if it is shorter it wont work.
         if module
             .module
             .send_spi(
@@ -272,7 +271,7 @@ where
                 1,
                 &mut tx,
                 INPUTMODULE6CHANNELMESSAGELENGTH,
-                0,
+                500_000, //for some reason it takes very long to exit the bootloader?
             )
             .is_err()
         {
