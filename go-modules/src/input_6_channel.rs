@@ -188,6 +188,19 @@ where
         }
     }
 
+	pub fn configure_supplies(
+		self,
+		supply1: InputModule6ChannelSupply,
+		supply2: InputModule6ChannelSupply,
+		supply3: InputModule6ChannelSupply,
+	) -> Self {
+		let mut config = self.config;
+		config.supplies[0] = supply1;
+		config.supplies[1] = supply2;
+		config.supplies[2] = supply3;
+		InputModule6ChannelBuilder { module: self.module, config: config }
+	}
+
     pub fn build(self) -> Result<InputModule6Channel<SPI, ResetPin, InterruptPin, Delay>, (GoModule<SPI,ResetPin,InterruptPin,Delay>, InputModule6ChannelConfiguration)> {
         let mut module = InputModule6Channel {
             module: self.module,
@@ -209,7 +222,7 @@ where
 		for supply in &module.configuration.supplies {
 			cursor.write(&[*supply as u8]).unwrap();
 		}
-		if module.module.send_spi(ModuleCommunicationDirection::ToModule, 11, ModuleCommunicationType::Configuration, 1, cursor.get_mut(), u16::MAX).is_err() {
+		if module.module.send_spi(ModuleCommunicationDirection::ToModule, 11, ModuleCommunicationType::Configuration, 1, cursor.get_mut(), 0).is_err() {
 			return Err((module.module, module.configuration))
 		}
 		Ok(module)
