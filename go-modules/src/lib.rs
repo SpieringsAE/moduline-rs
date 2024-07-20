@@ -1,3 +1,5 @@
 #![no_std]
-pub mod input_6_channel;
-pub use input_6_channel::InputModule6ChannelBuilder;
+mod input_6_channel;
+pub use input_6_channel::*;
+mod output_6_channel;
+pub use output_6_channel::*;
