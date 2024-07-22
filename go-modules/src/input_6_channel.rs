@@ -112,7 +112,11 @@ where
             INPUTMODULE6CHANNELMESSAGELENGTH,
             0,
         )?;
-        if rx[2] != 2 || rx[3] != 11 || rx[4] != 3 || rx[5] != 1 {
+        if rx[2] != ModuleCommunicationDirection::FromModule as u8
+            || rx[3] != 11
+            || rx[4] != ModuleCommunicationType::Data as u8
+            || rx[5] != 1
+        {
             return Err(GoModuleError::CommunicationError(
                 go_module_base::CommunicationError::UnableToSerDe,
             ));
@@ -203,6 +207,13 @@ where
         }
     }
 
+    pub fn from_configuration(
+        module: GoModule<SPI, ResetPin, InterruptPin, Delay>,
+        config: InputModule6ChannelConfiguration,
+    ) -> Self {
+        InputModule6ChannelBuilder { module, config }
+    }
+
     pub fn configure_channel(
         self,
         channel: InputModule6ChannelNum,
@@ -215,7 +226,7 @@ where
         config.channels[channel as usize - 1] = InputModule6ChannelChannel { func, pu, pd, volt };
         InputModule6ChannelBuilder {
             module: self.module,
-            config: config,
+            config,
         }
     }
 
@@ -231,7 +242,7 @@ where
         config.supplies[2] = supply3;
         InputModule6ChannelBuilder {
             module: self.module,
-            config: config,
+            config,
         }
     }
 
@@ -240,7 +251,7 @@ where
     ) -> Result<
         InputModule6Channel<SPI, ResetPin, InterruptPin, Delay>,
         (
-            GoModule<SPI, ResetPin, InterruptPin, Delay>,
+            GoModuleUnknown<SPI, ResetPin, InterruptPin, Delay>,
             InputModule6ChannelConfiguration,
         ),
     > {
@@ -249,11 +260,11 @@ where
             configuration: self.config,
         };
         let Ok(bootmessage) = module.module.escape_module_bootloader() else {
-            return Err((module.module, module.configuration));
+            return Err((module.module.degrade(), module.configuration));
         };
 
         if INPUTMODULE6CHANNELID != bootmessage[6..9] {
-            return Err((module.module, module.configuration));
+            return Err((module.module.degrade(), module.configuration));
         }
         let mut tx = [0u8; INPUTMODULE6CHANNELMESSAGELENGTH + 5];
         for (i, channel) in module.configuration.channels.iter().enumerate() {
@@ -275,7 +286,7 @@ where
             )
             .is_err()
         {
-            return Err((module.module, module.configuration));
+            return Err((module.module.degrade(), module.configuration));
         }
         Ok(module)
     }
