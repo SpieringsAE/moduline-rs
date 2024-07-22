@@ -208,8 +208,6 @@ pub mod go_module {
             tx[4] = message_type as u8;
             tx[5] = message_index;
             tx[len - 1] = module_checksum(tx, len);
-            rx[0] = 0;
-            rx[len - 1] = 0;
 
             let mut transactions = [Operation::Transfer(rx, tx)];
             if self
@@ -401,8 +399,6 @@ pub mod go_module_async {
             tx[4] = message_type as u8;
             tx[5] = message_index;
             tx[tx.len() - 1] = module_checksum(tx);
-            rx[0] = 0;
-            rx[rx.len() - 1] = 0;
 
             let mut transactions = [
                 Operation::DelayNs(delay_us as u32 * 100),
