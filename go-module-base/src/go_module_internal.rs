@@ -165,21 +165,21 @@ pub mod go_module {
             tx[len - 1] = module_checksum(tx, len);
 
             let mut transactions = [Operation::Write(tx)];
-            if self
-                .interrupt
-                .is_low()
-                .map_err(GoModuleError::InterruptPin)?
-            {
-                self.delay.delay_us(delay_us);
-                self.spi
-                    .transaction(&mut transactions)
-                    .map_err(GoModuleError::SPI)?;
-                Ok(())
-            } else {
-                Err(GoModuleError::CommunicationError(
-                    CommunicationError::ModuleUnavailable,
-                ))
-            }
+            //            if self
+            //              .interrupt
+            //            .is_low()
+            //          .map_err(GoModuleError::InterruptPin)?
+            //    {
+            self.delay.delay_us(delay_us);
+            self.spi
+                .transaction(&mut transactions)
+                .map_err(GoModuleError::SPI)?;
+            Ok(())
+            //            } else {
+            //              Err(GoModuleError::CommunicationError(
+            //                CommunicationError::ModuleUnavailable,
+            //          ))
+            //    }
         }
 
         pub fn send_receive_spi(
@@ -210,27 +210,27 @@ pub mod go_module {
             tx[len - 1] = module_checksum(tx, len);
 
             let mut transactions = [Operation::Transfer(rx, tx)];
-            if self
-                .interrupt
-                .is_low()
-                .map_err(GoModuleError::InterruptPin)?
-            {
-                self.delay.delay_us(delay_us);
-                self.spi
-                    .transaction(&mut transactions)
-                    .map_err(GoModuleError::SPI)?;
-                if module_checksum(&rx, len) == rx[len - 1] && rx[1] as usize == len {
-                    Ok(())
-                } else {
-                    Err(GoModuleError::CommunicationError(
-                        CommunicationError::ChecksumIncorrect,
-                    ))
-                }
+            //            if self
+            //              .interrupt
+            //            .is_low()
+            //          .map_err(GoModuleError::InterruptPin)?
+            //    {
+            self.delay.delay_us(delay_us);
+            self.spi
+                .transaction(&mut transactions)
+                .map_err(GoModuleError::SPI)?;
+            if module_checksum(&rx, len) == rx[len - 1] && rx[1] as usize == len {
+                Ok(())
             } else {
                 Err(GoModuleError::CommunicationError(
-                    CommunicationError::ModuleUnavailable,
+                    CommunicationError::ChecksumIncorrect,
                 ))
             }
+            //            } else {
+            //              Err(GoModuleError::CommunicationError(
+            //                CommunicationError::ModuleUnavailable,
+            //          ))
+            //    }
         }
 
         pub fn get_module_interrupt_state(
