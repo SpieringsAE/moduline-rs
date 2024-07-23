@@ -8,8 +8,8 @@ use go_module_base::{
     GoModule, GoModuleError, GoModuleUnknown, ModuleCommunicationDirection, ModuleCommunicationType,
 };
 
-const OUTPUTMODULE6CHANNELMESSAGELENGTH: usize = 49;
-const OUTPUTMODULE6CHANNELID: [u8; 3] = [20, 10, 1];
+const OUTPUTMODULE6CHANNELMESSAGELENGTH: usize = 44;
+const OUTPUTMODULE6CHANNELID: [u8; 3] = [20, 20, 2];
 
 #[repr(u8)]
 #[derive(Clone, Copy, Default)]
@@ -170,7 +170,7 @@ where
 
     pub fn set_and_read_channels(
         &mut self,
-        setpoint: OutputModule6ChannelSetpoint,
+        setpoint: &OutputModule6ChannelSetpoint,
     ) -> Result<
         OutputModule6ChannelValues,
         GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>,
