@@ -1,5 +1,3 @@
-use core::u16;
-
 use embedded_hal::{
     delay::DelayNs,
     digital::{InputPin, OutputPin},
@@ -27,10 +25,25 @@ pub enum OutputModule6ChannelFunc {
     Frequency,
 }
 
-#[derive(Default)]
+impl OutputModule6ChannelFunc {
+    fn discriminant(&self) -> u8 {
+        //This is only safe to do on enums with #[repr(u8)].
+        //Sadly there seems to be no inherently safe method to do this.
+        unsafe { *<*const _>::from(self).cast::<u8>() }
+    }
+}
+
+#[repr(u8)]
+#[derive(Default, Clone, Copy)]
 pub enum OutputModule6ChannelFrequency {
+    Hz100 = 1,
+    Hz200,
+    Hz500,
     #[default]
-    Hz1000,
+    Hz1_000,
+    Hz2_000,
+    Hz5_000,
+    Hz10_000,
 }
 
 #[repr(usize)]
@@ -106,9 +119,36 @@ pub struct OutputModule6ChannelBuilder<SPI, ResetPin, InterruptPin, Delay> {
     configuration: OutputModule6ChannelConfiguration,
 }
 
-impl OutputModule6ChannelChannel {
-    fn serialize1(&self, channel_num: usize, tx: &mut [u8]) {
-        tx[6+channel_num] = self.func as u8;
+impl OutputModule6ChannelSetpoint {
+    fn serialize(&self, tx: &mut [u8]) {
+        tx[6..8].copy_from_slice(&self.channel1.to_le_bytes());
+        tx[12..14].copy_from_slice(&self.channel2.to_le_bytes());
+        tx[18..20].copy_from_slice(&self.channel3.to_le_bytes());
+        tx[24..26].copy_from_slice(&self.channel4.to_le_bytes());
+        tx[30..32].copy_from_slice(&self.channel5.to_le_bytes());
+        tx[36..38].copy_from_slice(&self.channel6.to_le_bytes());
+    }
+}
+
+impl OutputModule6ChannelConfiguration {
+    fn serialize1(&self, tx: &mut [u8]) {
+        for (i, channel) in self.channels.iter().enumerate() {
+            let func_byte = channel.func.discriminant() << 4 | self.frequencies[i / 2] as u8;
+            tx[6 + i] = func_byte;
+            tx[12 + i * 2..14 + i * 2].copy_from_slice(&channel.max_current.to_le_bytes())
+        }
+    }
+
+    fn serialize2(&self, tx: &mut [u8]) {
+        for (i, channel) in self.channels.iter().enumerate() {
+            match channel.func {
+                OutputModule6ChannelFunc::PeakAndHold(settings) => {
+                    tx[6 + i * 2..8 + i * 2].copy_from_slice(&settings.peak_current.to_le_bytes());
+                    tx[18 + i * 2..20 + i * 2].copy_from_slice(&settings.peak_time.to_le_bytes());
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -130,12 +170,14 @@ where
 
     pub fn set_and_read_channels(
         &mut self,
+        setpoint: OutputModule6ChannelSetpoint,
     ) -> Result<
         OutputModule6ChannelValues,
         GoModuleError<SPI::Error, ResetPin::Error, InterruptPin::Error>,
     > {
         let mut tx = [0u8; OUTPUTMODULE6CHANNELMESSAGELENGTH + 5];
         let mut rx = [0u8; OUTPUTMODULE6CHANNELMESSAGELENGTH + 5];
+        setpoint.serialize(&mut tx);
         self.module.send_receive_spi(
             ModuleCommunicationDirection::ToModule,
             22,
@@ -251,8 +293,38 @@ where
         }
 
         let mut tx = [0u8; OUTPUTMODULE6CHANNELMESSAGELENGTH + 5];
-        for (i, channel) in module.configuration.channels.iter().enumerate() {
-            channel.
+        module.configuration.serialize1(&mut tx);
+        if module
+            .module
+            .send_spi(
+                ModuleCommunicationDirection::ToModule,
+                22,
+                ModuleCommunicationType::Configuration,
+                1,
+                &mut tx,
+                OUTPUTMODULE6CHANNELMESSAGELENGTH,
+                500_000,
+            )
+            .is_err()
+        {
+            return Err((module.module.degrade(), module.configuration));
         }
+        module.configuration.serialize2(&mut tx);
+        if module
+            .module
+            .send_spi(
+                ModuleCommunicationDirection::ToModule,
+                22,
+                ModuleCommunicationType::Configuration,
+                2,
+                &mut tx,
+                OUTPUTMODULE6CHANNELMESSAGELENGTH,
+                500,
+            )
+            .is_err()
+        {
+            return Err((module.module.degrade(), module.configuration));
+        }
+        Ok(module)
     }
 }
